@@ -1,1 +1,30 @@
-{"expo":{"android":{"adaptiveIcon":{"backgroundColor":"#ffffff","foregroundImage":"./assets/adaptive-icon.png"},"package":"com.pdfsigner.app"},"assetBundlePatterns":["**/*"],"icon":"./assets/icon.png","ios":{"supportsTablet":true},"name":"PDF Signer","newArchEnabled":true,"orientation":"portrait","plugins":["expo-router"],"scheme":"pdfsigner","slug":"pdf-signer","splash":{"backgroundColor":"#ffffff","image":"./assets/splash.png","resizeMode":"contain"},"userInterfaceStyle":"light","version":"1.0.0"}}
+{
+  "expo": {
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#ffffff",
+        "foregroundImage": "./assets/adaptive-icon.png"
+      },
+      "package": "com.pdfsigner.app"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "icon": "./assets/icon.png",
+    "ios": {
+      "supportsTablet": true
+    },
+    "name": "PDF Signer",
+    "orientation": "portrait",
+    "plugins": [
+      "expo-router",
+      "expo-asset",
+      "expo-sharing",
+      "expo-status-bar"
+    ],
+    "scheme": "pdfsigner",
+    "slug": "pdf-signer",
+    "userInterfaceStyle": "light",
+    "version": "1.0.0"
+  }
+}
