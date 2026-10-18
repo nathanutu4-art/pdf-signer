@@ -1,0 +1,29 @@
+# Expo
+.expo/
+dist/
+web-build/
+
+# Node
+node_modules/
+npm-debug.*
+
+# WAJIB: package-lock.json diabaikan — ukurannya melebihi batas push path GitHub,
+# dan CI tidak membutuhkannya (expo install --fix menyelaraskan versi SDK).
+package-lock.json
+
+# Build artefak
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig
+*.apk
+*.aab
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json

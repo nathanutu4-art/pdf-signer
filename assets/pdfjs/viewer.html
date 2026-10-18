@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PDF Signer Viewer</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; background: #3c4043; color: #fff;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+  #toolbar {
+    position: sticky; top: 0; z-index: 10;
+    display: flex; align-items: center; gap: 6px;
+    padding: 8px 10px; background: #202124;
+  }
+  #toolbar button {
+    background: #5f6368; color: #fff; border: none; border-radius: 8px;
+    padding: 9px 13px; font-size: 16px;
+  }
+  #toolbar button:active { background: #80868b; }
+  #pageInput {
+    width: 58px; text-align: center; padding: 8px 4px;
+    border-radius: 8px; border: none; font-size: 15px;
+  }
+  #pageLabel { font-size: 14px; color: #e8eaed; white-space: nowrap; }
+  .spacer { flex: 1; }
+  #stage { display: flex; justify-content: center; padding: 12px 10px 28px; }
+  #page {
+    background: #fff; box-shadow: 0 2px 10px rgba(0,0,0,.45);
+    max-width: 100%; height: auto;
+  }
+  #loading { text-align: center; padding: 72px 24px; color: #bdc1c6; font-size: 15px; }
+  #fallback {
+    display: none; margin: 48px 24px; background: #202124;
+    border-radius: 14px; padding: 28px 22px; text-align: center;
+  }
+  #fallback.show { display: block; }
+  #fallback h2 { margin: 0 0 10px; font-size: 18px; }
+  #fallback p { color: #bdc1c6; font-size: 14px; line-height: 1.6; margin: 0; }
+</style>
+</head>
+<body>
+<div id="toolbar" hidden>
+  <button id="prevBtn" title="Halaman sebelumnya">&#9664;</button>
+  <button id="nextBtn" title="Halaman berikutnya">&#9654;</button>
+  <input id="pageInput" inputmode="numeric" pattern="[0-9]*" value="1" />
+  <span id="pageLabel">/ &hellip;</span>
+  <span class="spacer"></span>
+  <button id="zoomOut" title="Perkecil">&minus;</button>
+  <button id="zoomIn" title="Perbesar">+</button>
+  <button id="zoomFit" title="Paskan ke layar">Pas</button>
+</div>
+<div id="loading">Membuka dokumen&hellip;</div>
+<div id="stage" hidden><canvas id="page"></canvas></div>
+<div id="fallback">
+  <h2>Tidak dapat memuat pustaka PDF</h2>
+  <p id="fallbackMsg">Penampil membutuhkan koneksi internet satu kali untuk mengunduh pustaka PDF dari CDN. Periksa koneksi Anda, lalu tutup dan buka kembali dokumen ini.</p>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>
+(function () {
+  'use strict';
+  var WORKER = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  var pdf = null, pageNum = 1, zoom = 1;
+  var pdfW = 0, pdfH = 0;
+  var canvas = document.getElementById('page');
+  var ctx = canvas.getContext('2d');
+  var toolbar = document.getElementById('toolbar');
+  var stage = document.getElementById('stage');
+  var loading = document.getElementById('loading');
+  var fallback = document.getElementById('fallback');
+  var pageInput = document.getElementById('pageInput');
+  var pageLabel = document.getElementById('pageLabel');
+
+  function post(m) {
+    try { if (window.ReactNativeWebView) window.ReactNativeWebView.postMessage(JSON.stringify(m)); } catch (e) {}
+  }
+
+  function showFallback(msg) {
+    loading.style.display = 'none';
+    toolbar.hidden = true;
+    stage.hidden = true;
+    if (msg) document.getElementById('fallbackMsg').textContent = msg;
+    fallback.classList.add('show');
+    post({ type: 'error', message: msg || 'cdn_unreachable' });
+  }
+
+  function b64ToU8(b64) {
+    var bin = atob(b64), len = bin.length, u8 = new Uint8Array(len);
+    for (var i = 0; i < len; i++) u8[i] = bin.charCodeAt(i);
+    return u8;
+  }
+
+  function updateLabel() {
+    pageInput.value = String(pageNum);
+    pageLabel.textContent = '/ ' + (pdf ? pdf.numPages : '\u2026');
+  }
+
+  function render() {
+    if (!pdf) return;
+    pdf.getPage(pageNum).then(function (p) {
+      var v0 = p.getViewport({ scale: 1 });
+      pdfW = v0.width; pdfH = v0.height;
+      var stageW = stage.clientWidth - 20;
+      var scale = (stageW / v0.width) * zoom;
+      var vp = p.getViewport({ scale: scale });
+      canvas.width = Math.floor(vp.width);
+      canvas.height = Math.floor(vp.height);
+      canvas.style.width = Math.floor(vp.width) + 'px';
+      canvas.style.height = Math.floor(vp.height) + 'px';
+      return p.render({ canvasContext: ctx, viewport: vp }).promise;
+    }).then(function () {
+      updateLabel();
+      post({ type: 'page', page: pageNum, pages: pdf.numPages, pdfWidth: pdfW, pdfHeight: pdfH });
+    }).catch(function (err) {
+      showFallback('Gagal me-render halaman: ' + (err && err.message ? err.message : err));
+    });
+  }
+
+  function gotoPage(n) {
+    if (!pdf) return;
+    pageNum = Math.min(Math.max(1, n), pdf.numPages);
+    render();
+  }
+
+  function setZoom(z) {
+    zoom = Math.min(Math.max(0.5, z), 4);
+    render();
+  }
+
+  document.getElementById('prevBtn').addEventListener('click', function () { gotoPage(pageNum - 1); });
+  document.getElementById('nextBtn').addEventListener('click', function () { gotoPage(pageNum + 1); });
+  document.getElementById('zoomIn').addEventListener('click', function () { setZoom(zoom + 0.25); });
+  document.getElementById('zoomOut').addEventListener('click', function () { setZoom(zoom - 0.25); });
+  document.getElementById('zoomFit').addEventListener('click', function () { setZoom(1); });
+  pageInput.addEventListener('change', function () {
+    var n = parseInt(pageInput.value, 10);
+    if (!isNaN(n)) gotoPage(n); else updateLabel();
+  });
+
+  function onMessage(e) {
+    var m;
+    try { m = JSON.parse(e.data); } catch (err) { return; }
+    if (!m || !m.type) return;
+    if (m.type === 'init') {
+      if (typeof pdfjsLib === 'undefined') { showFallback(null); return; }
+      try { pdfjsLib.GlobalWorkerOptions.workerSrc = WORKER; } catch (err) {}
+      pdfjsLib.getDocument({ data: b64ToU8(m.base64) }).promise.then(function (doc) {
+        pdf = doc;
+        pageNum = 1; zoom = 1;
+        loading.style.display = 'none';
+        toolbar.hidden = false;
+        stage.hidden = false;
+        render();
+      }).catch(function (err) {
+        showFallback('Dokumen tidak dapat dibuka: ' + (err && err.message ? err.message : err));
+      });
+    } else if (m.type === 'goto') {
+      gotoPage(m.page);
+    } else if (m.type === 'setZoom') {
+      setZoom(m.zoom);
+    }
+  }
+  document.addEventListener('message', onMessage);
+  window.addEventListener('message', onMessage);
+  post({ type: 'ready' });
+})();
+</script>
+</body>
+</html>
