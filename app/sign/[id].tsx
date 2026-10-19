@@ -185,11 +185,10 @@ export default function SignScreen() {
   const setAnchorClamped = (x: number, y: number) => {
     const hw = sigW / 2;
     const hh = sigH / 2;
-    // Gunakan ukuran render aktual bila tersedia agar pas dengan PDF.
-    const rw = renderInfo?.renderedWidth || viewW;
-    const rh = renderInfo?.renderedHeight || viewH;
-    const cx = Math.min(Math.max(hw, x), Math.max(hw, rw - hw));
-    const cy = Math.min(Math.max(hh, y), Math.max(hh, rh - hh));
+    // Kembali ke viewW/viewH (terbukti benar untuk tap); renderInfo hanya
+    // untuk skala stempel, bukan untuk batas overlay.
+    const cx = Math.min(Math.max(hw, x), Math.max(hw, viewW - hw));
+    const cy = Math.min(Math.max(hh, y), Math.max(hh, viewH - hh));
     anchorRef.current = { x: cx, y: cy };
     setAnchor(anchorRef.current);
   };
@@ -425,11 +424,7 @@ export default function SignScreen() {
                 untuk menaruhnya di titik lain. Lalu atur ukurannya.
               </Text>
               <View
-                style={[
-                  s.previewBox,
-                  // Tinggi mengikuti hasil render aktual agar overlay pas.
-                  { height: renderInfo?.renderedHeight || viewH },
-                ]}
+                style={[s.previewBox, viewH > 0 && { height: viewH }]}
                 onLayout={(e) => setViewW(e.nativeEvent.layout.width)}
               >
                 {viewW > 0 && viewH > 0 ? (
