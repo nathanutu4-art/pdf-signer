@@ -18,6 +18,7 @@ export default function ReaderScreen() {
   const [pdfBase64, setPdfBase64] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [zoom, setZoom] = useState(1);
 
   useEffect(() => {
     let cancelled = false;
@@ -70,7 +71,24 @@ export default function ReaderScreen() {
 
   return (
     <View style={s.root}>
-      <PdfViewer pdfBase64={pdfBase64} />
+      <PdfViewer pdfBase64={pdfBase64} zoom={zoom} />
+      <View style={s.zoomBar}>
+        <Pressable
+          style={s.zoomBtn}
+          onPress={() => setZoom((z) => Math.max(0.5, +(z - 0.25).toFixed(2)))}
+        >
+          <Text style={s.zoomBtnText}>−</Text>
+        </Pressable>
+        <Pressable style={s.zoomBtn} onPress={() => setZoom(1)}>
+          <Text style={s.zoomBtnText}>{Math.round(zoom * 100)}%</Text>
+        </Pressable>
+        <Pressable
+          style={s.zoomBtn}
+          onPress={() => setZoom((z) => Math.min(4, +(z + 0.25).toFixed(2)))}
+        >
+          <Text style={s.zoomBtnText}>+</Text>
+        </Pressable>
+      </View>
       <Pressable
         style={s.signBar}
         onPress={() => router.push({ pathname: '/sign/[id]', params: { id } })}
@@ -105,4 +123,21 @@ const s = StyleSheet.create({
     alignItems: 'center',
   },
   signBarText: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  zoomBar: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 8,
+    backgroundColor: '#fff',
+    borderTopWidth: 1,
+    borderTopColor: '#e4e7ec',
+  },
+  zoomBtn: {
+    backgroundColor: '#eef2ff',
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 18,
+  },
+  zoomBtnText: { color: '#175cd3', fontWeight: '700', fontSize: 15 },
 });

@@ -421,12 +421,16 @@ export default function SignScreen() {
               >
                 {viewW > 0 && viewH > 0 ? (
                   <View style={{ flex: 1 }}>
-                    <PdfViewer
-                      pdfBase64={pdfB64}
-                      page={page}
-                      interactive={false}
-                      onPageInfo={setRenderInfo}
-                    />
+                    {/* WebView dibuat buta-sentuhan agar overlay drag selalu
+                        menerima gesture (WebView Android bisa menutupinya). */}
+                    <View style={{ flex: 1 }} pointerEvents="none">
+                      <PdfViewer
+                        pdfBase64={pdfB64}
+                        page={page}
+                        interactive={false}
+                        onPageInfo={setRenderInfo}
+                      />
+                    </View>
                     {!renderInfo && (
                       <View style={[StyleSheet.absoluteFill, s.previewLoading]}>
                         <ActivityIndicator size="large" color="#175cd3" />

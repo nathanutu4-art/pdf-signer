@@ -27,6 +27,8 @@ type Props = {
   /** Default true. false = WebView tidak bisa di-scroll/zoom. */
   interactive?: boolean;
   onPageInfo?: (info: PdfPageInfo) => void;
+  /** Tingkat zoom eksternal (1 = pas). Mengirim perintah zoom ke WebView. */
+  zoom?: number;
 };
 
 export default function PdfViewer({
@@ -34,6 +36,7 @@ export default function PdfViewer({
   page,
   interactive = true,
   onPageInfo,
+  zoom,
 }: Props) {
   const [html, setHtml] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -64,6 +67,13 @@ export default function PdfViewer({
   const post = useCallback((msg: unknown) => {
     webRef.current?.postMessage(JSON.stringify(msg));
   }, []);
+
+  // Teruskan perubahan zoom eksternal ke WebView.
+  useEffect(() => {
+    if (readyRef.current && typeof zoom === 'number') {
+      post({ type: 'zoom', zoom });
+    }
+  }, [zoom, post]);
 
   const onMessage = (e: WebViewMessageEvent) => {
     try {
