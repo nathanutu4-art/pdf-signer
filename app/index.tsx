@@ -10,6 +10,7 @@ import { useCallback, useState } from 'react';import {
 } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import * as DocumentPicker from 'expo-document-picker';
+import Constants from 'expo-constants';
 import * as Sharing from 'expo-sharing';
 import {
   PdfEntry,
@@ -50,9 +51,9 @@ export default function LibraryScreen() {
     try {
       const res = await DocumentPicker.getDocumentAsync({
         type: 'application/pdf',
-        // WAJIB true (dok. resmi Expo): tanpa ini FileSystem sering tidak bisa
-        // langsung membaca file hasil picker (masalah timing).
-        copyToCacheDirectory: true,
+        // Di APK: true (copyAsync terbukti berhasil). Di Expo Go: false agar
+        // dapat content:// URI yang dibaca via API FileSystem baru.
+        copyToCacheDirectory: Constants.appOwnership !== 'expo',
       });
       if (res.canceled || !res.assets || res.assets.length === 0) return;
       const asset = res.assets[0];

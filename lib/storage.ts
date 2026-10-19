@@ -1,6 +1,7 @@
 // Penyimpanan file lokal: dokumen PDF, hasil bertanda tangan, dan
 // pustaka tanda tangan (PNG). Semua di bawah documentDirectory aplikasi.
 import * as FileSystem from 'expo-file-system/legacy';
+import { File as NewApiFile } from 'expo-file-system';
 import { bytesToBase64 } from './base64';
 
 export type PdfEntry = {
@@ -106,31 +107,21 @@ export async function importPdfFromPicker(
     : `${sanitized}.pdf`;
   const name = uniqueName(withExt, existing);
   const to = pdfsDir() + name;
-  // Dok. resmi Expo: FileSystem tidak selalu bisa LANGSUNG membaca file hasil
-  // picker (masalah timing) — tunggu file cache benar-benar siap dulu.
-  for (let i = 0; i < 10; i++) {
-    try {
-      const probe = await FileSystem.getInfoAsync(pickUri);
-      if (probe.exists && (probe.size ?? 0) > 0) break;
-    } catch {
-      /* abaikan, coba lagi */
-    }
-    await new Promise<void>((r) => setTimeout(r, 300));
-  }
-  // Jalur cepat: copyAsync native. Kalau masih gagal (khas Expo Go),
-  // fallback ke baca-base64 + tulis ulang (jalur native berbeda).
-  try {
-    await FileSystem.copyAsync({ from: pickUri, to });
-  } catch {
-    const b64 = await FileSystem.readAsStringAsync(pickUri, {
-      encoding: FileSystem.EncodingType.Base64,
-    });
-    if (!b64 || b64.length === 0) {
+  if (pickUri.startsWith('content://')) {
+    // Expo Go: API legacy tidak mengenali SAF URI media.documents
+    // (isSAFUri-nya hanya cocok com.android.externalstorage) — baca via
+    // API FileSystem baru yang memakai DocumentsContract.isDocumentUri.
+    const src = new NewApiFile(pickUri);
+    const bytes = new Uint8Array(await src.arrayBuffer());
+    if (bytes.length === 0) {
       throw new Error('File PDF tidak terbaca (kosong).');
     }
-    await FileSystem.writeAsStringAsync(to, b64, {
+    await FileSystem.writeAsStringAsync(to, bytesToBase64(bytes), {
       encoding: FileSystem.EncodingType.Base64,
     });
+  } else {
+    // APK rilis: copyAsync native (terbukti berhasil).
+    await FileSystem.copyAsync({ from: pickUri, to });
   }
   const info = await FileSystem.getInfoAsync(to);
   if (!info.exists || (info.size ?? 0) === 0) {
