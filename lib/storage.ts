@@ -1,6 +1,6 @@
 // Penyimpanan file lokal: dokumen PDF, hasil bertanda tangan, dan
 // pustaka tanda tangan (PNG). Semua di bawah documentDirectory aplikasi.
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import { bytesToBase64 } from './base64';
 
 export type PdfEntry = {
