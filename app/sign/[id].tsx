@@ -185,8 +185,11 @@ export default function SignScreen() {
   const setAnchorClamped = (x: number, y: number) => {
     const hw = sigW / 2;
     const hh = sigH / 2;
-    const cx = Math.min(Math.max(hw, x), Math.max(hw, viewW - hw));
-    const cy = Math.min(Math.max(hh, y), Math.max(hh, viewH - hh));
+    // Gunakan ukuran render aktual bila tersedia agar pas dengan PDF.
+    const rw = renderInfo?.renderedWidth || viewW;
+    const rh = renderInfo?.renderedHeight || viewH;
+    const cx = Math.min(Math.max(hw, x), Math.max(hw, rw - hw));
+    const cy = Math.min(Math.max(hh, y), Math.max(hh, rh - hh));
     anchorRef.current = { x: cx, y: cy };
     setAnchor(anchorRef.current);
   };
@@ -416,21 +419,21 @@ export default function SignScreen() {
                 untuk menaruhnya di titik lain. Lalu atur ukurannya.
               </Text>
               <View
-                style={[s.previewBox, viewH > 0 && { height: viewH }]}
+                style={[
+                  s.previewBox,
+                  // Tinggi mengikuti hasil render aktual agar overlay pas.
+                  { height: renderInfo?.renderedHeight || viewH },
+                ]}
                 onLayout={(e) => setViewW(e.nativeEvent.layout.width)}
               >
                 {viewW > 0 && viewH > 0 ? (
                   <View style={{ flex: 1 }}>
-                    {/* WebView dibuat buta-sentuhan agar overlay drag selalu
-                        menerima gesture (WebView Android bisa menutupinya). */}
-                    <View style={{ flex: 1 }} pointerEvents="none">
-                      <PdfViewer
-                        pdfBase64={pdfB64}
-                        page={page}
-                        interactive={false}
-                        onPageInfo={setRenderInfo}
-                      />
-                    </View>
+                    <PdfViewer
+                      pdfBase64={pdfB64}
+                      page={page}
+                      interactive={false}
+                      onPageInfo={setRenderInfo}
+                    />
                     {!renderInfo && (
                       <View style={[StyleSheet.absoluteFill, s.previewLoading]}>
                         <ActivityIndicator size="large" color="#175cd3" />
