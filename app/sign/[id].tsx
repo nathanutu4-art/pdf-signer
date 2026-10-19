@@ -17,6 +17,7 @@ import {
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import * as Sharing from 'expo-sharing';
+import * as FileSystem from 'expo-file-system/legacy';
 import RasterBridge, { RasterBridgeHandle } from '../../components/RasterBridge';
 import SignaturePad from '../../components/SignaturePad';
 import PdfViewer, { PdfPageInfo } from '../../components/PdfViewer';
@@ -56,6 +57,7 @@ export default function SignScreen() {
   const [busy, setBusy] = useState(false);
   const [busyMsg, setBusyMsg] = useState('');
   const [saved, setSaved] = useState<PdfEntry | null>(null);
+  const [scrollEnabled, setScrollEnabled] = useState(true);
 
   const bridge = useRef<RasterBridgeHandle>(null);
   const anchorRef = useRef<{ x: number; y: number } | null>(null);
@@ -267,6 +269,36 @@ export default function SignScreen() {
     }
   };
 
+  const downloadSaved = async () => {
+    if (!saved) return;
+    try {
+      const perms =
+        await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
+      if (!perms.granted) {
+        Alert.alert('Batal', 'Izin akses folder tidak diberikan.');
+        return;
+      }
+      const b64 = await FileSystem.readAsStringAsync(saved.uri, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+      const destUri =
+        await FileSystem.StorageAccessFramework.createFileAsync(
+          perms.directoryUri,
+          saved.name,
+          'application/pdf',
+        );
+      await FileSystem.writeAsStringAsync(destUri, b64, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+      Alert.alert('Berhasil', `Tersimpan sebagai “${saved.name}”.`);
+    } catch (e) {
+      Alert.alert(
+        'Gagal',
+        'Tidak dapat menyimpan: ' + (e instanceof Error ? e.message : String(e)),
+      );
+    }
+  };
+
   return (
     <View style={s.root}>
       {/* DIAG: bungkus height:0 agar WebView tidak mungkin menyumbang layout */}
@@ -295,7 +327,11 @@ export default function SignScreen() {
       ) : (
         // Scroll layar selalu aktif; gangguan coretan oleh scroll sudah
         // dicegah di dalam SignaturePad (onResponderTerminationRequest).
-        <ScrollView style={s.body} contentContainerStyle={s.bodyContent}>
+        <ScrollView
+          style={s.body}
+          contentContainerStyle={s.bodyContent}
+          scrollEnabled={scrollEnabled}
+        >
           {step === 0 && (
             <View style={s.card}>
               <Text style={s.cardTitle}>Pilih halaman</Text>
@@ -433,6 +469,8 @@ export default function SignScreen() {
                       <View
                         style={StyleSheet.absoluteFill}
                         onTouchStart={(e) => {
+                          // Kunci scroll selama interaksi agar drag tidak direbut.
+                          setScrollEnabled(false);
                           const { locationX, locationY } = e.nativeEvent;
                           drag.current = {
                             bx: locationX,
@@ -452,6 +490,7 @@ export default function SignScreen() {
                           }
                         }}
                         onTouchEnd={(e) => {
+                          setScrollEnabled(true);
                           if (!drag.current.moved) {
                             const { locationX, locationY } = e.nativeEvent;
                             setAnchorClamped(locationX, locationY);
@@ -511,6 +550,9 @@ export default function SignScreen() {
               </Text>
               <Pressable style={s.primaryBtn} onPress={shareSaved}>
                 <Text style={s.primaryBtnText}>Bagikan PDF</Text>
+              </Pressable>
+              <Pressable style={s.primaryBtn} onPress={downloadSaved}>
+                <Text style={s.primaryBtnText}>⬇ Unduh ke Perangkat</Text>
               </Pressable>
               <Pressable
                 style={s.secondaryBtn}
