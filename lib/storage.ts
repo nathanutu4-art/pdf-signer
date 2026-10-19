@@ -225,6 +225,20 @@ export async function downloadPdfToDevice(entry: PdfEntry): Promise<void> {
   });
 }
 
+/** Penanda onboarding sudah dilihat (file kosong sebagai flag). */
+const ONBOARDING_FLAG = 'onboarding_seen';
+
+export async function hasSeenOnboarding(): Promise<boolean> {
+  await ensureDirs();
+  const info = await FileSystem.getInfoAsync(root() + ONBOARDING_FLAG);
+  return info.exists;
+}
+
+export async function setOnboardingSeen(): Promise<void> {
+  await ensureDirs();
+  await FileSystem.writeAsStringAsync(root() + ONBOARDING_FLAG, '1');
+}
+
 export function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`;
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;

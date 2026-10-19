@@ -18,10 +18,13 @@ import {
   downloadPdfToDevice,
   formatBytes,
   formatDate,
+  hasSeenOnboarding,
   importPdfFromPicker,
   listPdfs,
   listSignedPdfs,
+  setOnboardingSeen,
 } from '../lib/storage';
+import Onboarding from '../components/Onboarding';
 
 // Nomor versi tampil di kaki layar pustaka — naikkan setiap rilis
 // agar jelas build mana yang sedang diuji.
@@ -31,6 +34,16 @@ export default function LibraryScreen() {
   const [docs, setDocs] = useState<PdfEntry[]>([]);
   const [signed, setSigned] = useState<PdfEntry[]>([]);
   const [busy, setBusy] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState<boolean | null>(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      hasSeenOnboarding().then((seen) => {
+        if (!seen) setShowOnboarding(true);
+        else if (showOnboarding === null) setShowOnboarding(false);
+      });
+    }, []),
+  );
 
   const refresh = useCallback(async () => {
     try {
@@ -157,6 +170,23 @@ export default function LibraryScreen() {
       </View>
     </View>
   );
+
+  const finishOnboarding = async () => {
+    await setOnboardingSeen();
+    setShowOnboarding(false);
+  };
+
+  if (showOnboarding === null) {
+    return (
+      <View style={[s.root, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color="#175cd3" />
+      </View>
+    );
+  }
+
+  if (showOnboarding) {
+    return <Onboarding onDone={finishOnboarding} />;
+  }
 
   return (
     <ScrollView style={s.root} contentContainerStyle={s.content}>
