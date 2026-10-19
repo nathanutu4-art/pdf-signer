@@ -192,6 +192,8 @@ export default function SignScreen() {
 
   // Ketuk = taruh di titik ketuk; geser = pindahkan mengikuti jari.
   const drag = useRef({ bx: 0, by: 0, moved: false });
+  const overlayRef = useRef<View | null>(null);
+  const overlayPos = useRef({ px: 0, py: 0 });
   const stamp = async () => {
     if (!entry || !info || !pageInfo || !selectedSig || !anchor || !renderInfo)
       return;
@@ -444,27 +446,30 @@ export default function SignScreen() {
                     )}
                     {renderInfo && (
                       <View
+                        ref={overlayRef}
                         style={StyleSheet.absoluteFill}
                         onStartShouldSetResponder={() => true}
                         onMoveShouldSetResponder={() => true}
                         onResponderGrant={() => {
                           drag.current.moved = false;
+                          // Ukur posisi overlay di layar untuk konversi pageX/Y.
+                          overlayRef.current?.measure(
+                            (_x, _y, _w, _h, px, py) => {
+                              overlayPos.current = { px, py };
+                            },
+                          );
                         }}
                         onResponderMove={(e) => {
                           drag.current.moved = true;
-                          setAnchorClamped(
-                            e.nativeEvent.locationX,
-                            e.nativeEvent.locationY,
-                          );
+                          const { pageX, pageY } = e.nativeEvent;
+                          const { px, py } = overlayPos.current;
+                          setAnchorClamped(pageX - px, pageY - py);
                         }}
                         onResponderRelease={(e) => {
-                          // Hanya untuk ketuk; jika sudah digeser, posisi
-                          // sudah benar dari onResponderMove, jangan timpa.
                           if (!drag.current.moved) {
-                            setAnchorClamped(
-                              e.nativeEvent.locationX,
-                              e.nativeEvent.locationY,
-                            );
+                            const { pageX, pageY } = e.nativeEvent;
+                            const { px, py } = overlayPos.current;
+                            setAnchorClamped(pageX - px, pageY - py);
                           }
                         }}
                         onResponderTerminationRequest={() => false}
