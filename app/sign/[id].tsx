@@ -232,8 +232,19 @@ export default function SignScreen() {
     let tahap = 'awal';
     try {
       tahap = 'baca-tanda-tangan';
+      if (!selectedSig?.uri) {
+        throw new Error(
+          `selectedSig.uri kosong (sigId=${sigId}, jumlah=${sigs.length})`,
+        );
+      }
       const sigB64 = await readAsBase64(selectedSig.uri);
       tahap = 'konversi-base64';
+      if (typeof sigB64 !== 'string') {
+        throw new Error(`sigB64 bertipe ${typeof sigB64}, bukan string`);
+      }
+      if (typeof pdfB64 !== 'string' || pdfB64.length === 0) {
+        throw new Error(`pdfB64 kosong (tipe=${typeof pdfB64})`);
+      }
       const pdfBytes = base64ToBytes(pdfB64);
       const sigBytes = base64ToBytes(sigB64);
       tahap = 'stempel-pdf-lib';
@@ -277,7 +288,10 @@ export default function SignScreen() {
 
   return (
     <View style={s.root}>
-      <RasterBridge ref={bridge} />
+      {/* DIAG: bungkus height:0 agar WebView tidak mungkin menyumbang layout */}
+      <View style={{ height: 0, overflow: 'hidden' }}>
+        <RasterBridge ref={bridge} />
+      </View>
 
       <View style={s.stepper}>
         {STEP_LABELS.map((label, i) => (
