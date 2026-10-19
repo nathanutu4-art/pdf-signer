@@ -20,7 +20,8 @@ import * as Sharing from 'expo-sharing';
 import RasterBridge, { RasterBridgeHandle } from '../../components/RasterBridge';
 import SignaturePad from '../../components/SignaturePad';
 import PdfViewer, { PdfPageInfo } from '../../components/PdfViewer';
-import { base64ToBytes, getPdfInfo, stampPngOnPdf, PdfInfo } from '../../lib/pdf';
+import { getPdfInfo, stampPngOnPdf, PdfInfo } from '../../lib/pdf';
+import { base64ToBytes } from '../../lib/base64';
 import {
   PdfEntry,
   SigEntry,
@@ -191,28 +192,6 @@ export default function SignScreen() {
 
   // Ketuk = taruh di titik ketuk; geser = pindahkan mengikuti jari.
   const drag = useRef({ bx: 0, by: 0, moved: false });
-  const pan = PanResponder.create({
-    onStartShouldSetPanResponder: () => true,
-    onPanResponderGrant: () => {
-      const a = anchorRef.current;
-      drag.current = { bx: a ? a.x : 0, by: a ? a.y : 0, moved: false };
-    },
-    onPanResponderMove: (_e, g) => {
-      if (Math.abs(g.dx) + Math.abs(g.dy) > 6) drag.current.moved = true;
-      if (drag.current.moved) {
-        setAnchorClamped(drag.current.bx + g.dx, drag.current.by + g.dy);
-      }
-    },
-    onPanResponderRelease: (e) => {
-      if (!drag.current.moved) {
-        setAnchorClamped(e.nativeEvent.locationX, e.nativeEvent.locationY);
-      }
-    },
-    onPanResponderTerminate: () => {},
-    // Jangan biarkan ScrollView merebut gesture saat menggeser tanda tangan.
-    onPanResponderTerminationRequest: () => false,
-  });
-
   const stamp = async () => {
     if (!entry || !info || !pageInfo || !selectedSig || !anchor || !renderInfo)
       return;
@@ -451,7 +430,34 @@ export default function SignScreen() {
                       </View>
                     )}
                     {renderInfo && (
-                      <View style={StyleSheet.absoluteFill} {...pan.panHandlers}>
+                      <View
+                        style={StyleSheet.absoluteFill}
+                        onTouchStart={(e) => {
+                          const { locationX, locationY } = e.nativeEvent;
+                          drag.current = {
+                            bx: locationX,
+                            by: locationY,
+                            moved: false,
+                          };
+                        }}
+                        onTouchMove={(e) => {
+                          const { locationX, locationY } = e.nativeEvent;
+                          const dx = locationX - drag.current.bx;
+                          const dy = locationY - drag.current.by;
+                          if (Math.abs(dx) + Math.abs(dy) > 6) {
+                            drag.current.moved = true;
+                          }
+                          if (drag.current.moved) {
+                            setAnchorClamped(locationX, locationY);
+                          }
+                        }}
+                        onTouchEnd={(e) => {
+                          if (!drag.current.moved) {
+                            const { locationX, locationY } = e.nativeEvent;
+                            setAnchorClamped(locationX, locationY);
+                          }
+                        }}
+                      >
                         {anchor && selectedSig && sigW > 0 && (
                           <Image
                             source={{ uri: selectedSig.uri }}
