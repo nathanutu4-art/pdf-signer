@@ -445,20 +445,25 @@ export default function SignScreen() {
                         style={StyleSheet.absoluteFill}
                         onStartShouldSetResponder={() => true}
                         onMoveShouldSetResponder={() => true}
+                        onResponderGrant={() => {
+                          drag.current.moved = false;
+                        }}
                         onResponderMove={(e) => {
-                          // Ikuti posisi jari 1:1 — tanpa threshold/tracking
-                          // agar tidak ada kondisi "kembali ke titik semula".
+                          drag.current.moved = true;
                           setAnchorClamped(
                             e.nativeEvent.locationX,
                             e.nativeEvent.locationY,
                           );
                         }}
                         onResponderRelease={(e) => {
-                          // Ketuk maupun lepas setelah geser: pastikan di titik jari.
-                          setAnchorClamped(
-                            e.nativeEvent.locationX,
-                            e.nativeEvent.locationY,
-                          );
+                          // Hanya untuk ketuk; jika sudah digeser, posisi
+                          // sudah benar dari onResponderMove, jangan timpa.
+                          if (!drag.current.moved) {
+                            setAnchorClamped(
+                              e.nativeEvent.locationX,
+                              e.nativeEvent.locationY,
+                            );
+                          }
                         }}
                         onResponderTerminationRequest={() => false}
                       >
