@@ -50,7 +50,9 @@ export default function LibraryScreen() {
     try {
       const res = await DocumentPicker.getDocumentAsync({
         type: 'application/pdf',
-        copyToCacheDirectory: true,
+        // Jangan copyToCacheDirectory: file cache DocumentPicker "isn't readable"
+        // bagi expo-file-system di Expo Go. Baca langsung dari content:// URI.
+        copyToCacheDirectory: false,
       });
       if (res.canceled || !res.assets || res.assets.length === 0) return;
       const asset = res.assets[0];
