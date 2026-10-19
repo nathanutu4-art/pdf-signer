@@ -301,7 +301,13 @@ export default function SignScreen() {
       ) : (
         // Scroll layar selalu aktif; gangguan coretan oleh scroll sudah
         // dicegah di dalam SignaturePad (onResponderTerminationRequest).
-        <ScrollView style={s.body} contentContainerStyle={s.bodyContent}>
+        <ScrollView
+          style={s.body}
+          contentContainerStyle={s.bodyContent}
+          // Kunci scroll di langkah posisi agar gesture drag tanda tangan
+          // tidak direbut ScrollView (penyebab "kembali ke titik semula").
+          scrollEnabled={step !== 2}
+        >
           {step === 0 && (
             <View style={s.card}>
               <Text style={s.cardTitle}>Pilih halaman</Text>
@@ -444,29 +450,20 @@ export default function SignScreen() {
                         style={StyleSheet.absoluteFill}
                         onStartShouldSetResponder={() => true}
                         onMoveShouldSetResponder={() => true}
-                        onResponderGrant={(e) => {
-                          const { locationX, locationY } = e.nativeEvent;
-                          drag.current = {
-                            bx: locationX,
-                            by: locationY,
-                            moved: false,
-                          };
-                        }}
                         onResponderMove={(e) => {
-                          const { locationX, locationY } = e.nativeEvent;
-                          const dx = locationX - drag.current.bx;
-                          const dy = locationY - drag.current.by;
-                          if (Math.abs(dx) + Math.abs(dy) > 4) {
-                            drag.current.moved = true;
-                          }
-                          // Ikuti posisi jari 1:1 saat digeser.
-                          setAnchorClamped(locationX, locationY);
+                          // Ikuti posisi jari 1:1 — tanpa threshold/tracking
+                          // agar tidak ada kondisi "kembali ke titik semula".
+                          setAnchorClamped(
+                            e.nativeEvent.locationX,
+                            e.nativeEvent.locationY,
+                          );
                         }}
                         onResponderRelease={(e) => {
-                          if (!drag.current.moved) {
-                            const { locationX, locationY } = e.nativeEvent;
-                            setAnchorClamped(locationX, locationY);
-                          }
+                          // Ketuk maupun lepas setelah geser: pastikan di titik jari.
+                          setAnchorClamped(
+                            e.nativeEvent.locationX,
+                            e.nativeEvent.locationY,
+                          );
                         }}
                         onResponderTerminationRequest={() => false}
                       >
