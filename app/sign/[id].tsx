@@ -229,19 +229,29 @@ export default function SignScreen() {
 
     setBusy(true);
     setBusyMsg('Menempelkan tanda tangan…');
+    let tahap = 'awal';
     try {
+      tahap = 'baca-tanda-tangan';
       const sigB64 = await readAsBase64(selectedSig.uri);
-      const out = await stampPngOnPdf(base64ToBytes(pdfB64), base64ToBytes(sigB64), [
+      tahap = 'konversi-base64';
+      const pdfBytes = base64ToBytes(pdfB64);
+      const sigBytes = base64ToBytes(sigB64);
+      tahap = 'stempel-pdf-lib';
+      const out = await stampPngOnPdf(pdfBytes, sigBytes, [
         { pageIndex: page - 1, x: xPt, y: yPt, width: wPt, height: hPt },
       ]);
+      tahap = 'simpan-pdf';
       const savedEntry = await saveSignedPdf(out, entry.name);
       setSaved(savedEntry);
       setStep(3);
     } catch (e) {
+      const stack =
+        e instanceof Error && e.stack ? e.stack.slice(0, 900) : String(e);
       Alert.alert(
-        'Gagal',
-        'Tidak dapat menempelkan tanda tangan: ' +
-          (e instanceof Error ? e.message : String(e)),
+        'Gagal (diag)',
+        `Tahap: ${tahap}\nPesan: ${
+          e instanceof Error ? e.message : String(e)
+        }\n\nJejak:\n${stack}`,
       );
     } finally {
       setBusy(false);
@@ -547,11 +557,12 @@ export default function SignScreen() {
 }
 
 const s = StyleSheet.create({
-  root: { flex: 1 },
+  // DIAG SEMENTARA: warna untuk melacak pemilik area kosong. Hapus sebelum rilis.
+  root: { flex: 1, backgroundColor: '#ff0000' },
   stepper: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    backgroundColor: '#fff',
+    backgroundColor: '#00ff00',
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#e4e7ec',

@@ -23,7 +23,7 @@ import {
 
 // Nomor versi tampil di kaki layar pustaka — naikkan setiap rilis
 // agar jelas build mana yang sedang diuji.
-const APP_VERSION = 'v1.3.0';
+const APP_VERSION = 'v1.3.1-diag';
 
 export default function LibraryScreen() {
   const [docs, setDocs] = useState<PdfEntry[]>([]);
