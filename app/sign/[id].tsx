@@ -183,13 +183,10 @@ export default function SignScreen() {
 
   /** Pindahkan jangkar dengan clamp di dalam pratinjau. */
   const setAnchorClamped = (x: number, y: number) => {
-    const hw = sigW / 2;
-    const hh = sigH / 2;
-    // Kembali ke viewW/viewH (terbukti benar untuk tap); renderInfo hanya
-    // untuk skala stempel, bukan untuk batas overlay.
-    const cx = Math.min(Math.max(hw, x), Math.max(hw, viewW - hw));
-    const cy = Math.min(Math.max(hh, y), Math.max(hh, viewH - hh));
-    anchorRef.current = { x: cx, y: cy };
+    // Tanpa clamping UI — biarkan mentah agar tidak ada osilasi.
+    // Fungsi stamp sudah menjepit ke batas halaman PDF.
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+    anchorRef.current = { x, y };
     setAnchor(anchorRef.current);
   };
 

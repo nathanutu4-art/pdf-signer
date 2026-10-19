@@ -160,6 +160,7 @@
       lockPage = (m.lockPage > 0) ? m.lockPage : 0;
       if (lockPage > 0) {
         toolbar.hidden = true;
+        toolbar.style.display = 'none';
         stage.style.padding = '0';
       }
       pdfjsLib.getDocument({ data: b64ToU8(m.base64) }).promise.then(function (doc) {
