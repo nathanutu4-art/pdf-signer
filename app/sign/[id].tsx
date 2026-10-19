@@ -12,6 +12,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -63,6 +64,12 @@ export default function SignScreen() {
     selectedSig && sigW > 0 ? sigW * (selectedSig.height / selectedSig.width) : 0;
   const viewH =
     viewW > 0 && pageInfo ? (viewW * pageInfo.height) / pageInfo.width : 0;
+
+  // Ukuran pratinjau halaman di langkah 1 (tanpa onLayout: lebar layar
+  // dikurangi padding konten 16x2 + padding kartu 16x2).
+  const { width: winW } = useWindowDimensions();
+  const pvW = winW - 64;
+  const pvH = pageInfo && pvW > 0 ? (pvW * pageInfo.height) / pageInfo.width : 220;
 
   // Muat dokumen + info halaman.
   useEffect(() => {
@@ -261,16 +268,25 @@ export default function SignScreen() {
           <Text style={s.hint}>Memuat dokumen…</Text>
         </View>
       ) : (
-        // Kunci scroll saat papan tanda tangan terbuka agar coretan
-        // tidak terputus oleh scroll.
-        <ScrollView
-          style={s.body}
-          contentContainerStyle={s.bodyContent}
-          scrollEnabled={!showPad}
-        >
+        // Scroll layar selalu aktif; gangguan coretan oleh scroll sudah
+        // dicegah di dalam SignaturePad (onResponderTerminationRequest).
+        <ScrollView style={s.body} contentContainerStyle={s.bodyContent}>
           {step === 0 && (
             <View style={s.card}>
               <Text style={s.cardTitle}>Pilih halaman</Text>
+              <View style={[s.pagePreview, { height: pvH }]}>
+                {pdfB64 ? (
+                  <PdfViewer
+                    pdfBase64={pdfB64}
+                    page={page}
+                    interactive={false}
+                  />
+                ) : (
+                  <View style={s.previewLoading}>
+                    <ActivityIndicator size="large" color="#175cd3" />
+                  </View>
+                )}
+              </View>
               <Text style={s.cardDesc}>
                 Dokumen “{entry?.name}” memiliki {info.pageCount} halaman. Pilih
                 halaman tempat tanda tangan akan ditempel.
@@ -592,6 +608,11 @@ const s = StyleSheet.create({
   },
   secondaryBtnText: { color: '#344054', fontSize: 14, fontWeight: '600' },
   previewBox: { backgroundColor: '#3c4043', borderRadius: 10, overflow: 'hidden' },
+  pagePreview: {
+    backgroundColor: '#3c4043',
+    borderRadius: 10,
+    overflow: 'hidden',
+  },
   previewLoading: {
     minHeight: 220,
     alignItems: 'center',

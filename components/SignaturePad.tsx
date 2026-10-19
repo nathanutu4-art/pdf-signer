@@ -134,6 +134,10 @@ export default function SignaturePad({ rasterizeSvg, onSaved, onCancel }: Props)
         }}
         onStartShouldSetResponder={() => true}
         onMoveShouldSetResponder={() => true}
+        // Tolak permintaan ScrollView untuk mengambil alih saat jari
+        // sedang mencoret — coretan tidak akan terputus. Scroll layar
+        // tetap bisa dari area di luar papan.
+        onResponderTerminationRequest={() => false}
         onResponderGrant={(e) => {
           drawing.current = true;
           current.current = [

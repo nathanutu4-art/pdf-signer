@@ -128,12 +128,15 @@ const RasterBridge = forwardRef<RasterBridgeHandle, object>(
     };
 
     return (
+      // Absolute 1px: tidak pernah menempati ruang layout,
+      // namun JS tetap berjalan (display:none mematikan WebView).
       <WebView
         ref={webRef}
         originWhitelist={['*']}
         source={{ html: RASTER_HTML }}
         onMessage={onMessage}
-        style={{ width: 0, height: 0 }}
+        pointerEvents="none"
+        style={{ position: 'absolute', width: 1, height: 1, opacity: 0 }}
       />
     );
   },
