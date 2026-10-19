@@ -1,6 +1,5 @@
 // Pustaka dokumen: daftar PDF yang diimpor + hasil bertanda tangan.
-import { useCallback, useState } from 'react';
-import {
+import { useCallback, useState } from 'react';import {
   ActivityIndicator,
   Alert,
   Pressable,
@@ -21,6 +20,10 @@ import {
   listPdfs,
   listSignedPdfs,
 } from '../lib/storage';
+
+// Nomor versi tampil di kaki layar pustaka — naikkan setiap rilis
+// agar jelas build mana yang sedang diuji.
+const APP_VERSION = 'v1.3.0';
 
 export default function LibraryScreen() {
   const [docs, setDocs] = useState<PdfEntry[]>([]);
@@ -168,6 +171,8 @@ export default function LibraryScreen() {
           {signed.map((d) => renderDocRow(d, true))}
         </>
       )}
+
+      <Text style={s.version}>PDF Signer {APP_VERSION}</Text>
     </ScrollView>
   );
 }
@@ -239,4 +244,10 @@ const s = StyleSheet.create({
   chipText: { fontSize: 13, fontWeight: '600', color: '#344054' },
   chipTextPrimary: { color: '#fff' },
   chipDanger: { color: '#b42318' },
+  version: {
+    textAlign: 'center',
+    color: '#98a2b3',
+    fontSize: 12,
+    marginTop: 10,
+  },
 });

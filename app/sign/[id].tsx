@@ -24,6 +24,7 @@ import { base64ToBytes, getPdfInfo, stampPngOnPdf, PdfInfo } from '../../lib/pdf
 import {
   PdfEntry,
   SigEntry,
+  deleteEntry,
   findPdf,
   listSignatures,
   readAsBase64,
@@ -157,6 +158,25 @@ export default function SignScreen() {
     } catch {
       Alert.alert('Gagal', 'Tidak dapat menyimpan tanda tangan.');
     }
+  };
+
+  const confirmDeleteSig = (sig: SigEntry) => {
+    Alert.alert('Hapus tanda tangan', 'Hapus tanda tangan ini dari pustaka?', [
+      { text: 'Batal', style: 'cancel' },
+      {
+        text: 'Hapus',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await deleteEntry(sig.uri);
+            if (sigId === sig.id) setSigId(null);
+            await loadSigs();
+          } catch {
+            Alert.alert('Gagal', 'Tidak dapat menghapus tanda tangan.');
+          }
+        },
+      },
+    ]);
   };
 
   /** Pindahkan jangkar dengan clamp di dalam pratinjau. */
@@ -339,17 +359,25 @@ export default function SignScreen() {
               ) : (
                 <View style={s.sigGrid}>
                   {sigs.map((sig) => (
-                    <Pressable
-                      key={sig.id}
-                      style={[s.sigTile, sigId === sig.id && s.sigTileActive]}
-                      onPress={() => setSigId(sig.id)}
-                    >
-                      <Image
-                        source={{ uri: sig.uri }}
-                        style={s.sigImg}
-                        resizeMode="contain"
-                      />
-                    </Pressable>
+                    <View key={sig.id} style={s.sigTileWrap}>
+                      <Pressable
+                        style={[s.sigTile, sigId === sig.id && s.sigTileActive]}
+                        onPress={() => setSigId(sig.id)}
+                      >
+                        <Image
+                          source={{ uri: sig.uri }}
+                          style={s.sigImg}
+                          resizeMode="contain"
+                        />
+                      </Pressable>
+                      <Pressable
+                        style={s.sigDel}
+                        onPress={() => confirmDeleteSig(sig)}
+                        accessibilityLabel="Hapus tanda tangan"
+                      >
+                        <Text style={s.sigDelText}>✕</Text>
+                      </Pressable>
+                    </View>
                   ))}
                 </View>
               )}
@@ -578,8 +606,9 @@ const s = StyleSheet.create({
   },
   pageTotal: { fontSize: 16, color: '#667085' },
   sigGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  sigTileWrap: { width: '47%', position: 'relative' },
   sigTile: {
-    width: '47%',
+    width: '100%',
     backgroundColor: '#f9fafb',
     borderRadius: 10,
     borderWidth: 2,
@@ -589,6 +618,18 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  sigDel: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: '#fee4e2',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sigDelText: { color: '#b42318', fontSize: 13, fontWeight: '700' },
   sigTileActive: { borderColor: '#175cd3', backgroundColor: '#eff4ff' },
   sigImg: { width: '100%', height: 70 },
   padWrap: { marginTop: 4 },
