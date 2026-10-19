@@ -421,7 +421,12 @@ export default function SignScreen() {
                 untuk menaruhnya di titik lain. Lalu atur ukurannya.
               </Text>
               <View
-                style={[s.previewBox, viewH > 0 && { height: viewH }]}
+                style={[
+                  s.previewBox,
+                  // Tinggi persis mengikuti render aktual agar overlay
+                  // sejajar dengan PDF (tanpa offset).
+                  { height: renderInfo?.renderedHeight || viewH },
+                ]}
                 onLayout={(e) => setViewW(e.nativeEvent.layout.width)}
               >
                 {viewW > 0 && viewH > 0 ? (
