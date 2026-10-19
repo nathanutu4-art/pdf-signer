@@ -107,19 +107,15 @@
       pdfW = v0.width; pdfH = v0.height;
       // Mode kunci: kanvas mengisi penuh lebar stage (tanpa padding).
       var stageW = stage.clientWidth - (lockPage > 0 ? 0 : 20);
-      // Render tajam di layar high-DPI: skala dikali devicePixelRatio,
-      // tapi ukuran CSS tetap agar koordinat overlay akurat.
-      var dpr = window.devicePixelRatio || 1;
-      var scale = (stageW / v0.width) * zoom * dpr;
+      var scale = (stageW / v0.width) * zoom;
       var vp = p.getViewport({ scale: scale });
       var rw = Math.floor(vp.width), rh = Math.floor(vp.height);
       canvas.width = rw;
       canvas.height = rh;
-      canvas.style.width = (rw / dpr) + 'px';
-      canvas.style.height = (rh / dpr) + 'px';
+      canvas.style.width = rw + 'px';
+      canvas.style.height = rh + 'px';
       return p.render({ canvasContext: ctx, viewport: vp }).promise.then(function () {
-        // Laporkan ukuran CSS (bukan device px) untuk pemetaan koordinat.
-        return { rw: Math.floor(rw / dpr), rh: Math.floor(rh / dpr) };
+        return { rw: rw, rh: rh };
       });
     }).then(function (size) {
       updateLabel();
