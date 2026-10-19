@@ -1,11 +1,12 @@
 // Alur tanda tangan: 1) pilih halaman → 2) pilih/buat tanda tangan →
-// 3) ketuk posisi pada pratinjau + atur ukuran → 4) stempel via pdf-lib,
-// simpan salinan "signed", dan bagikan.
+// 3) atur posisi & ukuran pada pratinjau halaman PDF → 4) stempel via
+// pdf-lib, simpan salinan "signed", dan bagikan.
 import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   Image,
+  PanResponder,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -17,6 +18,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import * as Sharing from 'expo-sharing';
 import RasterBridge, { RasterBridgeHandle } from '../../components/RasterBridge';
 import SignaturePad from '../../components/SignaturePad';
+import PdfViewer, { PdfPageInfo } from '../../components/PdfViewer';
 import { base64ToBytes, getPdfInfo, stampPngOnPdf, PdfInfo } from '../../lib/pdf';
 import {
   PdfEntry,
@@ -26,7 +28,6 @@ import {
   readAsBase64,
   saveSignature,
   saveSignedPdf,
-  writeCacheBase64,
 } from '../../lib/storage';
 
 const STEP_LABELS = ['Halaman', 'Tanda tangan', 'Posisi', 'Selesai'];
@@ -44,8 +45,7 @@ export default function SignScreen() {
   const [sigId, setSigId] = useState<string | null>(null);
   const [showPad, setShowPad] = useState(false);
 
-  const [previewUri, setPreviewUri] = useState<string | null>(null);
-  const [previewRatio, setPreviewRatio] = useState(0); // tinggi / lebar
+  const [renderInfo, setRenderInfo] = useState<PdfPageInfo | null>(null);
   const [viewW, setViewW] = useState(0);
   const [anchor, setAnchor] = useState<{ x: number; y: number } | null>(null);
   const [sigW, setSigW] = useState(0);
@@ -55,7 +55,14 @@ export default function SignScreen() {
   const [saved, setSaved] = useState<PdfEntry | null>(null);
 
   const bridge = useRef<RasterBridgeHandle>(null);
+  const anchorRef = useRef<{ x: number; y: number } | null>(null);
   const selectedSig = sigs.find((x) => x.id === sigId) ?? null;
+
+  const pageInfo = info?.pages[page - 1];
+  const sigH =
+    selectedSig && sigW > 0 ? sigW * (selectedSig.height / selectedSig.width) : 0;
+  const viewH =
+    viewW > 0 && pageInfo ? (viewW * pageInfo.height) / pageInfo.width : 0;
 
   // Muat dokumen + info halaman.
   useEffect(() => {
@@ -96,49 +103,30 @@ export default function SignScreen() {
     }
   };
 
-  // Saat masuk langkah posisi: render halaman menjadi gambar pratinjau.
+  // Reset status pratinjau setiap masuk langkah posisi / ganti halaman.
   useEffect(() => {
-    if (step !== 2 || !pdfB64) return;
-    let cancelled = false;
-    (async () => {
-      setBusy(true);
-      setBusyMsg('Me-render halaman…');
-      setPreviewUri(null);
+    if (step === 2) {
+      anchorRef.current = null;
       setAnchor(null);
-      try {
-        const r = await bridge.current!.rasterizePdfPage(pdfB64, page, 1080);
-        if (cancelled) return;
-        const uri = await writeCacheBase64(`preview-p${page}.png`, r.base64);
-        if (cancelled) return;
-        setPreviewUri(uri);
-        setPreviewRatio(r.height / r.width);
-      } catch (e) {
-        if (!cancelled) {
-          Alert.alert(
-            'Gagal me-render',
-            e instanceof Error ? e.message : 'Periksa koneksi internet.',
-            [{ text: 'OK', onPress: () => setStep(1) }],
-          );
-        }
-      } finally {
-        if (!cancelled) {
-          setBusy(false);
-          setBusyMsg('');
-        }
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [step, pdfB64, page]);
-
-  // Nilai awal posisi & ukuran saat pratinjau siap.
-  useEffect(() => {
-    if (step === 2 && viewW > 0 && previewRatio > 0 && !anchor) {
-      setAnchor({ x: viewW / 2, y: (viewW * previewRatio) / 2 });
-      setSigW(viewW * 0.45);
+      setRenderInfo(null);
+      setSigW(0);
     }
-  }, [step, viewW, previewRatio, anchor]);
+  }, [step, page]);
+
+  // Nilai awal posisi & ukuran setelah ukuran pratinjau diketahui.
+  useEffect(() => {
+    if (step === 2 && viewW > 0 && viewH > 0 && sigW === 0) {
+      const w = viewW * 0.45;
+      const h0 = selectedSig ? w * (selectedSig.height / selectedSig.width) : 0;
+      const hw = w / 2;
+      const hh = h0 / 2;
+      const cx = Math.min(Math.max(hw, viewW / 2), Math.max(hw, viewW - hw));
+      const cy = Math.min(Math.max(hh, viewH / 2), Math.max(hh, viewH - hh));
+      anchorRef.current = { x: cx, y: cy };
+      setSigW(w);
+      setAnchor(anchorRef.current);
+    }
+  }, [step, viewW, viewH, sigW, selectedSig]);
 
   const clampPage = (n: number) => {
     if (!info) return 1;
@@ -164,11 +152,46 @@ export default function SignScreen() {
     }
   };
 
+  /** Pindahkan jangkar dengan clamp di dalam pratinjau. */
+  const setAnchorClamped = (x: number, y: number) => {
+    const hw = sigW / 2;
+    const hh = sigH / 2;
+    const cx = Math.min(Math.max(hw, x), Math.max(hw, viewW - hw));
+    const cy = Math.min(Math.max(hh, y), Math.max(hh, viewH - hh));
+    anchorRef.current = { x: cx, y: cy };
+    setAnchor(anchorRef.current);
+  };
+
+  // Ketuk = taruh di titik ketuk; geser = pindahkan mengikuti jari.
+  const drag = useRef({ bx: 0, by: 0, moved: false });
+  const pan = PanResponder.create({
+    onStartShouldSetPanResponder: () => true,
+    onPanResponderGrant: () => {
+      const a = anchorRef.current;
+      drag.current = { bx: a ? a.x : 0, by: a ? a.y : 0, moved: false };
+    },
+    onPanResponderMove: (_e, g) => {
+      if (Math.abs(g.dx) + Math.abs(g.dy) > 6) drag.current.moved = true;
+      if (drag.current.moved) {
+        setAnchorClamped(drag.current.bx + g.dx, drag.current.by + g.dy);
+      }
+    },
+    onPanResponderRelease: (e) => {
+      if (!drag.current.moved) {
+        setAnchorClamped(e.nativeEvent.locationX, e.nativeEvent.locationY);
+      }
+    },
+    onPanResponderTerminate: () => {},
+  });
+
   const stamp = async () => {
-    if (!entry || !info || !selectedSig || !anchor || viewW <= 0) return;
-    const pageInfo = info.pages[page - 1];
-    const scale = viewW / pageInfo.width; // px tampil per point PDF
-    const sigH = sigW * (selectedSig.height / selectedSig.width);
+    if (!entry || !info || !pageInfo || !selectedSig || !anchor || !renderInfo)
+      return;
+    // px tampil per point PDF, dari ukuran render aktual viewer.
+    const scale =
+      renderInfo.renderedWidth > 0
+        ? renderInfo.renderedWidth / pageInfo.width
+        : viewW / pageInfo.width;
     const wPt = sigW / scale;
     const hPt = sigH / scale;
     let xPt = (anchor.x - sigW / 2) / scale;
@@ -187,8 +210,12 @@ export default function SignScreen() {
       const savedEntry = await saveSignedPdf(out, entry.name);
       setSaved(savedEntry);
       setStep(3);
-    } catch {
-      Alert.alert('Gagal', 'Tidak dapat menempelkan tanda tangan.');
+    } catch (e) {
+      Alert.alert(
+        'Gagal',
+        'Tidak dapat menempelkan tanda tangan: ' +
+          (e instanceof Error ? e.message : String(e)),
+      );
     } finally {
       setBusy(false);
       setBusyMsg('');
@@ -210,9 +237,6 @@ export default function SignScreen() {
       Alert.alert('Gagal', 'Tidak dapat membagikan dokumen.');
     }
   };
-
-  const sigH = selectedSig && sigW > 0 ? sigW * (selectedSig.height / selectedSig.width) : 0;
-  const viewH = viewW > 0 && previewRatio > 0 ? viewW * previewRatio : 0;
 
   return (
     <View style={s.root}>
@@ -237,7 +261,13 @@ export default function SignScreen() {
           <Text style={s.hint}>Memuat dokumen…</Text>
         </View>
       ) : (
-        <ScrollView style={s.body} contentContainerStyle={s.bodyContent}>
+        // Kunci scroll saat papan tanda tangan terbuka agar coretan
+        // tidak terputus oleh scroll.
+        <ScrollView
+          style={s.body}
+          contentContainerStyle={s.bodyContent}
+          scrollEnabled={!showPad}
+        >
           {step === 0 && (
             <View style={s.card}>
               <Text style={s.cardTitle}>Pilih halaman</Text>
@@ -330,44 +360,47 @@ export default function SignScreen() {
             <View style={s.card}>
               <Text style={s.cardTitle}>Atur posisi & ukuran</Text>
               <Text style={s.cardDesc}>
-                Ketuk pratinjau untuk memindahkan tanda tangan, lalu atur
-                ukurannya.
+                Geser tanda tangan untuk memindahkan, atau ketuk pratinjau
+                untuk menaruhnya di titik lain. Lalu atur ukurannya.
               </Text>
               <View
-                style={s.previewBox}
+                style={[s.previewBox, viewH > 0 && { height: viewH }]}
                 onLayout={(e) => setViewW(e.nativeEvent.layout.width)}
               >
-                {previewUri && viewW > 0 ? (
-                  <Pressable
-                    onPress={(e) =>
-                      setAnchor({
-                        x: e.nativeEvent.locationX,
-                        y: e.nativeEvent.locationY,
-                      })
-                    }
-                  >
-                    <Image
-                      source={{ uri: previewUri }}
-                      style={{ width: viewW, height: viewH }}
-                      resizeMode="contain"
+                {viewW > 0 && viewH > 0 ? (
+                  <View style={{ flex: 1 }}>
+                    <PdfViewer
+                      pdfBase64={pdfB64}
+                      page={page}
+                      interactive={false}
+                      onPageInfo={setRenderInfo}
                     />
-                    {anchor && selectedSig && sigW > 0 && (
-                      <Image
-                        source={{ uri: selectedSig.uri }}
-                        style={{
-                          position: 'absolute',
-                          left: anchor.x - sigW / 2,
-                          top: anchor.y - sigH / 2,
-                          width: sigW,
-                          height: sigH,
-                        }}
-                        resizeMode="contain"
-                        pointerEvents="none"
-                      />
+                    {!renderInfo && (
+                      <View style={[StyleSheet.absoluteFill, s.previewLoading]}>
+                        <ActivityIndicator size="large" color="#175cd3" />
+                      </View>
                     )}
-                  </Pressable>
+                    {renderInfo && (
+                      <View style={StyleSheet.absoluteFill} {...pan.panHandlers}>
+                        {anchor && selectedSig && sigW > 0 && (
+                          <Image
+                            source={{ uri: selectedSig.uri }}
+                            style={{
+                              position: 'absolute',
+                              left: anchor.x - sigW / 2,
+                              top: anchor.y - sigH / 2,
+                              width: sigW,
+                              height: sigH,
+                            }}
+                            resizeMode="contain"
+                            pointerEvents="none"
+                          />
+                        )}
+                      </View>
+                    )}
+                  </View>
                 ) : (
-                  <View style={[s.previewLoading, viewH > 0 && { height: viewH }]}>
+                  <View style={s.previewLoading}>
                     <ActivityIndicator size="large" color="#175cd3" />
                   </View>
                 )}
@@ -453,9 +486,9 @@ export default function SignScreen() {
               style={[
                 s.navBtn,
                 s.navPrimary,
-                (!previewUri || !anchor) && s.navDisabled,
+                (!renderInfo || !anchor || busy) && s.navDisabled,
               ]}
-              disabled={!previewUri || !anchor || busy}
+              disabled={!renderInfo || !anchor || busy}
               onPress={stamp}
             >
               <Text style={[s.navBtnText, s.navPrimaryText]}>

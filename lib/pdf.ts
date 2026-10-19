@@ -24,6 +24,21 @@ export async function getPdfInfo(pdfBase64: string): Promise<PdfInfo> {
   return { pageCount: pages.length, pages };
 }
 
+/** Pastikan bytes benar-benar PNG sebelum ditempel (pesan error jelas). */
+function assertPng(bytes: Uint8Array): void {
+  const isPng =
+    bytes.length >= 8 &&
+    bytes[0] === 0x89 &&
+    bytes[1] === 0x50 &&
+    bytes[2] === 0x4e &&
+    bytes[3] === 0x47;
+  if (!isPng) {
+    throw new Error(
+      'File tanda tangan rusak atau bukan PNG. Hapus lalu buat ulang tanda tangan.',
+    );
+  }
+}
+
 /**
  * Tempelkan PNG tanda tangan ke beberapa posisi lalu kembalikan
  * bytes PDF baru (dokumen asli tidak diubah).
@@ -33,6 +48,7 @@ export async function stampPngOnPdf(
   pngBytes: Uint8Array,
   placements: Placement[],
 ): Promise<Uint8Array> {
+  assertPng(pngBytes);
   const doc = await PDFDocument.load(pdfBytes, { ignoreEncryption: true });
   const img = await doc.embedPng(pngBytes);
   for (const pl of placements) {

@@ -1,6 +1,6 @@
-// WebView tersembunyi untuk rasterisasi: me-render halaman PDF (via pdf.js)
-// atau SVG tanda tangan menjadi PNG (base64). Murni WebView + canvas,
-// tanpa native module — kompatibel Expo Go.
+// WebView tersembunyi untuk rasterisasi SVG tanda tangan menjadi PNG
+// (base64) via canvas. Murni WebView + canvas, tanpa native module,
+// tanpa CDN — kompatibel Expo Go dan sepenuhnya offline.
 import React, { forwardRef, useImperativeHandle, useRef } from 'react';
 import { WebView, WebViewMessageEvent } from 'react-native-webview';
 
@@ -11,11 +11,6 @@ export type RasterResult = {
 };
 
 export type RasterBridgeHandle = {
-  rasterizePdfPage: (
-    pdfBase64: string,
-    page: number,
-    widthPx: number,
-  ) => Promise<RasterResult>;
   rasterizeSvg: (
     svg: string,
     width: number,
@@ -31,36 +26,10 @@ type Pending = {
 };
 
 const RASTER_HTML = `<!DOCTYPE html><html><head><meta charset="utf-8" /></head><body>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"><\/script>
 <script>
 (function () {
   'use strict';
-  var WORKER = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-  var pdf = null, pdfKey = '';
   function post(m) { try { if (window.ReactNativeWebView) window.ReactNativeWebView.postMessage(JSON.stringify(m)); } catch (e) {} }
-  function b64ToU8(b64) { var bin = atob(b64), len = bin.length, u8 = new Uint8Array(len); for (var i = 0; i < len; i++) u8[i] = bin.charCodeAt(i); return u8; }
-
-  function rasterPdf(m) {
-    if (typeof pdfjsLib === 'undefined') {
-      post({ type: 'result', id: m.id, ok: false, error: 'Pustaka PDF gagal dimuat dari CDN. Periksa koneksi internet.' });
-      return;
-    }
-    try { pdfjsLib.GlobalWorkerOptions.workerSrc = WORKER; } catch (e) {}
-    var load = (m.base64 === pdfKey && pdf)
-      ? Promise.resolve(pdf)
-      : pdfjsLib.getDocument({ data: b64ToU8(m.base64) }).promise.then(function (doc) { pdf = doc; pdfKey = m.base64; return doc; });
-    load.then(function (doc) { return doc.getPage(m.page); }).then(function (p) {
-      var v0 = p.getViewport({ scale: 1 });
-      var vp = p.getViewport({ scale: m.width / v0.width });
-      var c = document.createElement('canvas');
-      c.width = Math.floor(vp.width); c.height = Math.floor(vp.height);
-      return p.render({ canvasContext: c.getContext('2d'), viewport: vp }).promise.then(function () { return c; });
-    }).then(function (c) {
-      post({ type: 'result', id: m.id, ok: true, dataUrl: c.toDataURL('image/png'), width: c.width, height: c.height });
-    }).catch(function (err) {
-      post({ type: 'result', id: m.id, ok: false, error: 'Gagal me-render halaman: ' + (err && err.message ? err.message : err) });
-    });
-  }
 
   function rasterSvg(m) {
     try {
@@ -82,8 +51,7 @@ const RASTER_HTML = `<!DOCTYPE html><html><head><meta charset="utf-8" /></head><
   function onMessage(e) {
     var m; try { m = JSON.parse(e.data); } catch (err) { return; }
     if (!m || !m.type) return;
-    if (m.type === 'pdf') rasterPdf(m);
-    else if (m.type === 'svg') rasterSvg(m);
+    if (m.type === 'svg') rasterSvg(m);
   }
   document.addEventListener('message', onMessage);
   window.addEventListener('message', onMessage);
@@ -115,8 +83,6 @@ const RasterBridge = forwardRef<RasterBridgeHandle, object>(
     useImperativeHandle(
       ref,
       () => ({
-        rasterizePdfPage: (pdfBase64, page, widthPx) =>
-          send({ type: 'pdf', base64: pdfBase64, page, width: widthPx }),
         rasterizeSvg: (svg, width, height, scale) =>
           send({ type: 'svg', svg, width, height, scale }),
       }),

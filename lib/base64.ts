@@ -29,20 +29,41 @@ export function base64ToBytes(b64: string): Uint8Array {
   return out;
 }
 
+// Dibangun per potongan lalu digabung sekali di akhir: waktu linear
+// untuk file besar (PDF multi-MB). Versi `s += ...` per triplet bersifat
+// kuadratik dan bisa macet/kehabisan memori pada PDF besar.
 export function bytesToBase64(bytes: Uint8Array): string {
-  let s = '';
-  for (let i = 0; i < bytes.length; i += 3) {
-    const a = bytes[i];
-    const b = i + 1 < bytes.length ? bytes[i + 1] : 0;
-    const c = i + 2 < bytes.length ? bytes[i + 2] : 0;
-    s +=
-      B64_CHARS[a >> 2] +
-      B64_CHARS[((a & 3) << 4) | (b >> 4)] +
-      B64_CHARS[((b & 15) << 2) | (c >> 6)] +
-      B64_CHARS[c & 63];
+  const out: string[] = [];
+  const full = bytes.length - (bytes.length % 3);
+  const STEP = 3 * 8192; // kelipatan 3 agar tidak memotong triplet
+  for (let i = 0; i < full; i += STEP) {
+    const end = Math.min(i + STEP, full);
+    let s = '';
+    for (let j = i; j < end; j += 3) {
+      const a = bytes[j];
+      const b = bytes[j + 1];
+      const c = bytes[j + 2];
+      s +=
+        B64_CHARS[a >> 2] +
+        B64_CHARS[((a & 3) << 4) | (b >> 4)] +
+        B64_CHARS[((b & 15) << 2) | (c >> 6)] +
+        B64_CHARS[c & 63];
+    }
+    out.push(s);
   }
   const rem = bytes.length % 3;
-  if (rem === 1) return s.slice(0, -2) + '==';
-  if (rem === 2) return s.slice(0, -1) + '=';
-  return s;
+  if (rem === 1) {
+    const a = bytes[full];
+    out.push(B64_CHARS[a >> 2] + B64_CHARS[(a & 3) << 4] + '==');
+  } else if (rem === 2) {
+    const a = bytes[full];
+    const b = bytes[full + 1];
+    out.push(
+      B64_CHARS[a >> 2] +
+        B64_CHARS[((a & 3) << 4) | (b >> 4)] +
+        B64_CHARS[(b & 15) << 2] +
+        '=',
+    );
+  }
+  return out.join('');
 }

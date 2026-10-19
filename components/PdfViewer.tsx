@@ -1,20 +1,45 @@
 // Penampil PDF: memuat assets/pdfjs/viewer.html (dibundle via expo-asset)
 // ke dalam WebView, lalu mengirim dokumen (base64). Navigasi halaman,
 // lompat halaman, dan zoom ditangani toolbar di dalam HTML.
+//
+// Mode kunci (prop `page`): halaman dikunci ke satu halaman tanpa toolbar,
+// untuk pratinjau posisi tanda tangan. Ukuran render dilaporkan lewat
+// `onPageInfo` agar koordinat layar dapat dipetakan ke point PDF.
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { WebView, WebViewMessageEvent } from 'react-native-webview';
 import { Asset } from 'expo-asset';
 import * as FileSystem from 'expo-file-system/legacy';
 
-type Props = {
-  pdfBase64: string;
+export type PdfPageInfo = {
+  page: number;
+  pages: number;
+  pdfWidth: number; // point PDF (skala 1)
+  pdfHeight: number; // point PDF (skala 1)
+  renderedWidth: number; // px CSS kanvas di WebView
+  renderedHeight: number; // px CSS kanvas di WebView
 };
 
-export default function PdfViewer({ pdfBase64 }: Props) {
+type Props = {
+  pdfBase64: string;
+  /** Kunci ke satu halaman (tanpa toolbar). */
+  page?: number;
+  /** Default true. false = WebView tidak bisa di-scroll/zoom. */
+  interactive?: boolean;
+  onPageInfo?: (info: PdfPageInfo) => void;
+};
+
+export default function PdfViewer({
+  pdfBase64,
+  page,
+  interactive = true,
+  onPageInfo,
+}: Props) {
   const [html, setHtml] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const webRef = useRef<WebView>(null);
+  const readyRef = useRef(false);
+  const lockedPage = page && page > 0 ? page : 0;
 
   useEffect(() => {
     let cancelled = false;
@@ -42,15 +67,40 @@ export default function PdfViewer({ pdfBase64 }: Props) {
 
   const onMessage = (e: WebViewMessageEvent) => {
     try {
-      const m = JSON.parse(e.nativeEvent.data) as { type?: string };
+      const m = JSON.parse(e.nativeEvent.data) as {
+        type?: string;
+        page?: number;
+        pages?: number;
+        pdfWidth?: number;
+        pdfHeight?: number;
+        renderedWidth?: number;
+        renderedHeight?: number;
+      };
       if (m.type === 'ready') {
-        post({ type: 'init', base64: pdfBase64 });
+        readyRef.current = true;
+        post({ type: 'init', base64: pdfBase64, lockPage: lockedPage });
+      } else if (m.type === 'page') {
+        onPageInfo?.({
+          page: m.page ?? 1,
+          pages: m.pages ?? 1,
+          pdfWidth: m.pdfWidth ?? 0,
+          pdfHeight: m.pdfHeight ?? 0,
+          renderedWidth: m.renderedWidth ?? 0,
+          renderedHeight: m.renderedHeight ?? 0,
+        });
       }
-      // 'page' dan 'error' ditangani di dalam halaman HTML.
+      // 'error' ditangani di dalam halaman HTML (pesan fallback Indonesia).
     } catch {
       /* abaikan pesan non-JSON */
     }
   };
+
+  // Halaman berubah setelah init (mode kunci).
+  useEffect(() => {
+    if (readyRef.current && lockedPage > 0) {
+      post({ type: 'goto', page: lockedPage });
+    }
+  }, [lockedPage, post]);
 
   if (loadError) {
     return (
@@ -75,6 +125,7 @@ export default function PdfViewer({ pdfBase64 }: Props) {
       originWhitelist={['*']}
       source={{ html }}
       onMessage={onMessage}
+      scrollEnabled={interactive}
       style={s.web}
     />
   );

@@ -65,6 +65,7 @@
   var WORKER = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
   var pdf = null, pageNum = 1, zoom = 1;
   var pdfW = 0, pdfH = 0;
+  var lockPage = 0; // >0: kunci ke satu halaman, tanpa toolbar (mode pratinjau posisi)
   var canvas = document.getElementById('page');
   var ctx = canvas.getContext('2d');
   var toolbar = document.getElementById('toolbar');
@@ -103,17 +104,25 @@
     pdf.getPage(pageNum).then(function (p) {
       var v0 = p.getViewport({ scale: 1 });
       pdfW = v0.width; pdfH = v0.height;
-      var stageW = stage.clientWidth - 20;
+      // Mode kunci: kanvas mengisi penuh lebar stage (tanpa padding).
+      var stageW = stage.clientWidth - (lockPage > 0 ? 0 : 20);
       var scale = (stageW / v0.width) * zoom;
       var vp = p.getViewport({ scale: scale });
-      canvas.width = Math.floor(vp.width);
-      canvas.height = Math.floor(vp.height);
-      canvas.style.width = Math.floor(vp.width) + 'px';
-      canvas.style.height = Math.floor(vp.height) + 'px';
-      return p.render({ canvasContext: ctx, viewport: vp }).promise;
-    }).then(function () {
+      var rw = Math.floor(vp.width), rh = Math.floor(vp.height);
+      canvas.width = rw;
+      canvas.height = rh;
+      canvas.style.width = rw + 'px';
+      canvas.style.height = rh + 'px';
+      return p.render({ canvasContext: ctx, viewport: vp }).promise.then(function () {
+        return { rw: rw, rh: rh };
+      });
+    }).then(function (size) {
       updateLabel();
-      post({ type: 'page', page: pageNum, pages: pdf.numPages, pdfWidth: pdfW, pdfHeight: pdfH });
+      post({
+        type: 'page', page: pageNum, pages: pdf.numPages,
+        pdfWidth: pdfW, pdfHeight: pdfH,
+        renderedWidth: size.rw, renderedHeight: size.rh,
+      });
     }).catch(function (err) {
       showFallback('Gagal me-render halaman: ' + (err && err.message ? err.message : err));
     });
@@ -147,11 +156,17 @@
     if (m.type === 'init') {
       if (typeof pdfjsLib === 'undefined') { showFallback(null); return; }
       try { pdfjsLib.GlobalWorkerOptions.workerSrc = WORKER; } catch (err) {}
+      lockPage = (m.lockPage > 0) ? m.lockPage : 0;
+      if (lockPage > 0) {
+        toolbar.hidden = true;
+        stage.style.padding = '0';
+      }
       pdfjsLib.getDocument({ data: b64ToU8(m.base64) }).promise.then(function (doc) {
         pdf = doc;
-        pageNum = 1; zoom = 1;
+        pageNum = lockPage > 0 ? Math.min(lockPage, doc.numPages) : 1;
+        zoom = 1;
         loading.style.display = 'none';
-        toolbar.hidden = false;
+        if (lockPage <= 0) toolbar.hidden = false;
         stage.hidden = false;
         render();
       }).catch(function (err) {
