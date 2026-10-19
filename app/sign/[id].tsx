@@ -209,6 +209,8 @@ export default function SignScreen() {
       }
     },
     onPanResponderTerminate: () => {},
+    // Jangan biarkan ScrollView merebut gesture saat menggeser tanda tangan.
+    onPanResponderTerminationRequest: () => false,
   });
 
   const stamp = async () => {

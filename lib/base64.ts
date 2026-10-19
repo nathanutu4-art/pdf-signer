@@ -14,7 +14,10 @@ function charIndex(ch: string): number {
 export function base64ToBytes(b64: string): Uint8Array {
   const clean = b64.replace(/[^A-Za-z0-9+/=]/g, '');
   if (clean.length % 4 !== 0) throw new Error('Panjang base64 tidak valid.');
-  const pad = clean.endsWith('==') ? 2 : clean.endsWith('=') ? 1 : 0;
+  // Hindari String.endsWith (bermasalah di sebagian Hermes): pakai charAt.
+  let pad = 0;
+  if (clean.charAt(clean.length - 1) === '=') pad += 1;
+  if (clean.charAt(clean.length - 2) === '=') pad += 1;
   const out = new Uint8Array((clean.length * 3) / 4 - pad);
   let o = 0;
   for (let i = 0; i < clean.length; i += 4) {
