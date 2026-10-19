@@ -17,7 +17,6 @@ import {
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import * as Sharing from 'expo-sharing';
-import * as FileSystem from 'expo-file-system/legacy';
 import RasterBridge, { RasterBridgeHandle } from '../../components/RasterBridge';
 import SignaturePad from '../../components/SignaturePad';
 import PdfViewer, { PdfPageInfo } from '../../components/PdfViewer';
@@ -27,6 +26,7 @@ import {
   PdfEntry,
   SigEntry,
   deleteEntry,
+  downloadPdfToDevice,
   findPdf,
   listSignatures,
   readAsBase64,
@@ -57,7 +57,6 @@ export default function SignScreen() {
   const [busy, setBusy] = useState(false);
   const [busyMsg, setBusyMsg] = useState('');
   const [saved, setSaved] = useState<PdfEntry | null>(null);
-  const [scrollEnabled, setScrollEnabled] = useState(true);
 
   const bridge = useRef<RasterBridgeHandle>(null);
   const anchorRef = useRef<{ x: number; y: number } | null>(null);
@@ -215,19 +214,8 @@ export default function SignScreen() {
     let tahap = 'awal';
     try {
       tahap = 'baca-tanda-tangan';
-      if (!selectedSig?.uri) {
-        throw new Error(
-          `selectedSig.uri kosong (sigId=${sigId}, jumlah=${sigs.length})`,
-        );
-      }
       const sigB64 = await readAsBase64(selectedSig.uri);
       tahap = 'konversi-base64';
-      if (typeof sigB64 !== 'string') {
-        throw new Error(`sigB64 bertipe ${typeof sigB64}, bukan string`);
-      }
-      if (typeof pdfB64 !== 'string' || pdfB64.length === 0) {
-        throw new Error(`pdfB64 kosong (tipe=${typeof pdfB64})`);
-      }
       const pdfBytes = base64ToBytes(pdfB64);
       const sigBytes = base64ToBytes(sigB64);
       tahap = 'stempel-pdf-lib';
@@ -239,13 +227,12 @@ export default function SignScreen() {
       setSaved(savedEntry);
       setStep(3);
     } catch (e) {
-      const stack =
-        e instanceof Error && e.stack ? e.stack.slice(0, 900) : String(e);
       Alert.alert(
-        'Gagal (diag)',
-        `Tahap: ${tahap}\nPesan: ${
-          e instanceof Error ? e.message : String(e)
-        }\n\nJejak:\n${stack}`,
+        'Gagal',
+        'Tidak dapat menempelkan tanda tangan' +
+          (tahap !== 'awal' ? ` (tahap ${tahap})` : '') +
+          ': ' +
+          (e instanceof Error ? e.message : String(e)),
       );
     } finally {
       setBusy(false);
@@ -272,24 +259,7 @@ export default function SignScreen() {
   const downloadSaved = async () => {
     if (!saved) return;
     try {
-      const perms =
-        await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
-      if (!perms.granted) {
-        Alert.alert('Batal', 'Izin akses folder tidak diberikan.');
-        return;
-      }
-      const b64 = await FileSystem.readAsStringAsync(saved.uri, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
-      const destUri =
-        await FileSystem.StorageAccessFramework.createFileAsync(
-          perms.directoryUri,
-          saved.name,
-          'application/pdf',
-        );
-      await FileSystem.writeAsStringAsync(destUri, b64, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
+      await downloadPdfToDevice(saved);
       Alert.alert('Berhasil', `Tersimpan sebagai “${saved.name}”.`);
     } catch (e) {
       Alert.alert(
@@ -301,7 +271,8 @@ export default function SignScreen() {
 
   return (
     <View style={s.root}>
-      {/* DIAG: bungkus height:0 agar WebView tidak mungkin menyumbang layout */}
+      {/* WebView rasterisasi disembunyikan dalam wadah height:0 agar tidak
+          mengganggu layout (pernah menyebabkan area kosong). */}
       <View style={{ height: 0, overflow: 'hidden' }}>
         <RasterBridge ref={bridge} />
       </View>
@@ -327,11 +298,7 @@ export default function SignScreen() {
       ) : (
         // Scroll layar selalu aktif; gangguan coretan oleh scroll sudah
         // dicegah di dalam SignaturePad (onResponderTerminationRequest).
-        <ScrollView
-          style={s.body}
-          contentContainerStyle={s.bodyContent}
-          scrollEnabled={scrollEnabled}
-        >
+        <ScrollView style={s.body} contentContainerStyle={s.bodyContent}>
           {step === 0 && (
             <View style={s.card}>
               <Text style={s.cardTitle}>Pilih halaman</Text>
@@ -468,9 +435,9 @@ export default function SignScreen() {
                     {renderInfo && (
                       <View
                         style={StyleSheet.absoluteFill}
-                        onTouchStart={(e) => {
-                          // Kunci scroll selama interaksi agar drag tidak direbut.
-                          setScrollEnabled(false);
+                        onStartShouldSetResponder={() => true}
+                        onMoveShouldSetResponder={() => true}
+                        onResponderGrant={(e) => {
                           const { locationX, locationY } = e.nativeEvent;
                           drag.current = {
                             bx: locationX,
@@ -478,24 +445,23 @@ export default function SignScreen() {
                             moved: false,
                           };
                         }}
-                        onTouchMove={(e) => {
+                        onResponderMove={(e) => {
                           const { locationX, locationY } = e.nativeEvent;
                           const dx = locationX - drag.current.bx;
                           const dy = locationY - drag.current.by;
-                          if (Math.abs(dx) + Math.abs(dy) > 6) {
+                          if (Math.abs(dx) + Math.abs(dy) > 4) {
                             drag.current.moved = true;
                           }
-                          if (drag.current.moved) {
-                            setAnchorClamped(locationX, locationY);
-                          }
+                          // Ikuti posisi jari 1:1 saat digeser.
+                          setAnchorClamped(locationX, locationY);
                         }}
-                        onTouchEnd={(e) => {
-                          setScrollEnabled(true);
+                        onResponderRelease={(e) => {
                           if (!drag.current.moved) {
                             const { locationX, locationY } = e.nativeEvent;
                             setAnchorClamped(locationX, locationY);
                           }
                         }}
+                        onResponderTerminationRequest={() => false}
                       >
                         {anchor && selectedSig && sigW > 0 && (
                           <Image
@@ -621,12 +587,11 @@ export default function SignScreen() {
 }
 
 const s = StyleSheet.create({
-  // DIAG SEMENTARA: warna untuk melacak pemilik area kosong. Hapus sebelum rilis.
-  root: { flex: 1, backgroundColor: '#ff0000' },
+  root: { flex: 1 },
   stepper: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    backgroundColor: '#00ff00',
+    backgroundColor: '#fff',
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#e4e7ec',

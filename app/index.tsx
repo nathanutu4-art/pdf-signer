@@ -15,6 +15,7 @@ import * as Sharing from 'expo-sharing';
 import {
   PdfEntry,
   deleteEntry,
+  downloadPdfToDevice,
   formatBytes,
   formatDate,
   importPdfFromPicker,
@@ -24,7 +25,7 @@ import {
 
 // Nomor versi tampil di kaki layar pustaka — naikkan setiap rilis
 // agar jelas build mana yang sedang diuji.
-const APP_VERSION = 'v1.3.1-diag';
+const APP_VERSION = 'v1.4.0';
 
 export default function LibraryScreen() {
   const [docs, setDocs] = useState<PdfEntry[]>([]);
@@ -100,6 +101,18 @@ export default function LibraryScreen() {
     }
   };
 
+  const downloadPdf = async (entry: PdfEntry) => {
+    try {
+      await downloadPdfToDevice(entry);
+      Alert.alert('Berhasil', `Tersimpan sebagai “${entry.name}”.`);
+    } catch (e) {
+      Alert.alert(
+        'Gagal',
+        e instanceof Error ? e.message : 'Tidak dapat mengunduh dokumen.',
+      );
+    }
+  };
+
   const renderDocRow = (entry: PdfEntry, isSigned: boolean) => (
     <View key={entry.id} style={s.card}>
       <Pressable
@@ -135,6 +148,9 @@ export default function LibraryScreen() {
             <Text style={s.chipText}>Bagikan</Text>
           </Pressable>
         )}
+        <Pressable style={s.chip} onPress={() => downloadPdf(entry)}>
+          <Text style={s.chipText}>Unduh</Text>
+        </Pressable>
         <Pressable style={s.chip} onPress={() => confirmDelete(entry)}>
           <Text style={[s.chipText, s.chipDanger]}>Hapus</Text>
         </Pressable>

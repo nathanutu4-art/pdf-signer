@@ -204,6 +204,27 @@ export async function writeCacheBase64(
   return uri;
 }
 
+/** Unduh PDF ke folder pilihan pengguna (mis. Download) via SAF. */
+export async function downloadPdfToDevice(entry: PdfEntry): Promise<void> {
+  const perms =
+    await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
+  if (!perms.granted) {
+    throw new Error('Izin akses folder tidak diberikan.');
+  }
+  const b64 = await FileSystem.readAsStringAsync(entry.uri, {
+    encoding: FileSystem.EncodingType.Base64,
+  });
+  if (!b64) throw new Error('File tidak terbaca.');
+  const destUri = await FileSystem.StorageAccessFramework.createFileAsync(
+    perms.directoryUri,
+    entry.name,
+    'application/pdf',
+  );
+  await FileSystem.writeAsStringAsync(destUri, b64, {
+    encoding: FileSystem.EncodingType.Base64,
+  });
+}
+
 export function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`;
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
