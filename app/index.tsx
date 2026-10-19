@@ -57,8 +57,12 @@ export default function LibraryScreen() {
       setBusy(true);
       await importPdfFromPicker(asset.uri, asset.name ?? 'dokumen.pdf');
       await refresh();
-    } catch {
-      Alert.alert('Gagal', 'Tidak dapat mengimpor PDF.');
+    } catch (e) {
+      Alert.alert(
+        'Gagal',
+        'Tidak dapat mengimpor PDF: ' +
+          (e instanceof Error ? e.message : String(e)),
+      );
     } finally {
       setBusy(false);
     }
