@@ -106,17 +106,32 @@ export async function importPdfFromPicker(
     : `${sanitized}.pdf`;
   const name = uniqueName(withExt, existing);
   const to = pdfsDir() + name;
-  // Baca langsung dari URI picker (content:// didukung via ContentResolver).
-  // copyAsync dan cache DocumentPicker ("isn't readable") bermasalah di Expo Go.
-  const b64 = await FileSystem.readAsStringAsync(pickUri, {
-    encoding: FileSystem.EncodingType.Base64,
-  });
-  if (!b64 || b64.length === 0) {
-    throw new Error('File PDF tidak terbaca (kosong).');
+  // Dok. resmi Expo: FileSystem tidak selalu bisa LANGSUNG membaca file hasil
+  // picker (masalah timing) — tunggu file cache benar-benar siap dulu.
+  for (let i = 0; i < 10; i++) {
+    try {
+      const probe = await FileSystem.getInfoAsync(pickUri);
+      if (probe.exists && (probe.size ?? 0) > 0) break;
+    } catch {
+      /* abaikan, coba lagi */
+    }
+    await new Promise<void>((r) => setTimeout(r, 300));
   }
-  await FileSystem.writeAsStringAsync(to, b64, {
-    encoding: FileSystem.EncodingType.Base64,
-  });
+  // Jalur cepat: copyAsync native. Kalau masih gagal (khas Expo Go),
+  // fallback ke baca-base64 + tulis ulang (jalur native berbeda).
+  try {
+    await FileSystem.copyAsync({ from: pickUri, to });
+  } catch {
+    const b64 = await FileSystem.readAsStringAsync(pickUri, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+    if (!b64 || b64.length === 0) {
+      throw new Error('File PDF tidak terbaca (kosong).');
+    }
+    await FileSystem.writeAsStringAsync(to, b64, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+  }
   const info = await FileSystem.getInfoAsync(to);
   if (!info.exists || (info.size ?? 0) === 0) {
     throw new Error('Hasil salinan PDF kosong atau tidak terbentuk.');
