@@ -106,8 +106,24 @@ export async function importPdfFromPicker(
     : `${sanitized}.pdf`;
   const name = uniqueName(withExt, existing);
   const to = pdfsDir() + name;
-  await FileSystem.copyAsync({ from: pickUri, to });
+  // Jalur cepat: copyAsync native (berhasil di APK rilis). Di Expo Go, file
+  // cache DocumentPicker kadang "isn't readable" bagi copyAsync, maka
+  // fallback ke baca-base64 + tulis ulang (jalur native yang berbeda).
+  try {
+    await FileSystem.copyAsync({ from: pickUri, to });
+  } catch {
+    await new Promise<void>((r) => setTimeout(r, 400));
+    const b64 = await FileSystem.readAsStringAsync(pickUri, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+    await FileSystem.writeAsStringAsync(to, b64, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+  }
   const info = await FileSystem.getInfoAsync(to);
+  if (!info.exists || (info.size ?? 0) === 0) {
+    throw new Error('Hasil salinan PDF kosong atau tidak terbentuk.');
+  }
   return {
     id: name,
     name,
